@@ -66,27 +66,27 @@ main.wrap{padding:50px 28px 70px}
 <main class="wrap"><section><div class="marker"><span class="idx">01</span><span class="line"></span><span class="label">In the kitchen</span></div><h2>Preparing</h2><div class="list" id="lp"></div></section>
 <section><div class="marker"><span class="idx">02</span><span class="line"></span><span class="label">Forwarded to rider</span></div><h2>Ready for rider</h2><div class="list" id="lr"></div></section></main>
 <script>
-const KEY="foodline_orders",$=s=>document.querySelector(s),peso=n=>"₱"+n.toLocaleString();
+const DB="https://foodline-4576d-default-rtdb.asia-southeast1.firebasedatabase.app/",KEY="foodline_orders",$=s=>document.querySelector(s),peso=n=>"₱"+n.toLocaleString();
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-const load=()=>{try{return JSON.parse(localStorage.getItem(KEY)||"[]")}catch(_){return[]}};
+let cache=[];const load=async()=>{if(DB){try{const r=await(await fetch(DB+"/orders.json")).json();cache=r?Object.values(r):[]}catch(_){}return cache}try{return JSON.parse(localStorage.getItem(KEY)||"[]")}catch(_){return[]}};
 function card(o){const t=new Date(o.at).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"});
 return `<article class="o ${o.status}"><div class="top"><h4>Order ${esc(o.id)}</h4><span>${t}</span></div>
 <div class="who"><b>${esc(o.name)}</b><span>${esc(o.loc)}</span></div>
 ${o.items.map(i=>`<div class="row"><span>${i.e} ${esc(i.n)} × ${i.q}</span><span>${peso(i.p*i.q)}</span></div>`).join("")}
 <div class="sum"><span>Total</span><span>${peso(o.total)}</span></div>
 <div class="seg" role="group" aria-label="Order status"><button class="pr ${o.status=="PREPARING"?"on":""}" data-id="${esc(o.id)}" data-s="PREPARING">PREPARING</button><button class="rd ${o.status=="READY"?"on":""}" data-id="${esc(o.id)}" data-s="READY">READY</button></div></article>`}
-function paint(){const all=load().sort((a,b)=>b.at-a.at),p=all.filter(o=>o.status!="READY"),r=all.filter(o=>o.status=="READY");
+async function paint(){const all=(await load()).filter(o=>o.status!="DELIVERED").sort((a,b)=>b.at-a.at),p=all.filter(o=>o.status!="READY"),r=all.filter(o=>o.status=="READY");
 $("#n0").textContent=all.length;$("#n1").textContent=p.length;$("#n2").textContent=r.length;
 $("#lp").innerHTML=p.length?p.map(card).join(""):'<div class="none">No orders being prepared. New customer orders appear here automatically.</div>';
 $("#lr").innerHTML=r.length?r.map(card).join(""):'<div class="none">Orders you mark READY move here and are forwarded to the rider site.</div>'}
-document.addEventListener("click",e=>{const b=e.target.closest("button[data-id]");if(!b)return;
-const all=load(),o=all.find(x=>x.id===b.dataset.id);if(!o||o.status===b.dataset.s)return;
-o.status=b.dataset.s;if(o.status=="READY")o.readyAt=Date.now();else delete o.readyAt;
-try{localStorage.setItem(KEY,JSON.stringify(all));new BroadcastChannel(KEY).postMessage("upd")}catch(_){}paint()});
+document.addEventListener("click",async e=>{const b=e.target.closest("button[data-id]");if(!b)return;
+const all=await load(),o=all.find(x=>x.id===b.dataset.id);if(!o||o.status===b.dataset.s)return;
+o.status=b.dataset.s;o.readyAt=o.status=="READY"?Date.now():null;
+try{if(DB)await fetch(DB+"/orders/"+o.id+".json",{method:"PATCH",body:JSON.stringify({status:o.status,readyAt:o.readyAt})});else{localStorage.setItem(KEY,JSON.stringify(all));new BroadcastChannel(KEY).postMessage("upd")}}catch(_){}paint()});
 addEventListener("storage",e=>{if(e.key===KEY)paint()});
 try{new BroadcastChannel(KEY).onmessage=paint}catch(_){}
 addEventListener("scroll",()=>document.querySelector("header").classList.toggle("scrolled",scrollY>40),{passive:true});
-setInterval(paint,5000);paint();
+setInterval(paint,3000);paint();
 </script>
 </body>
 </html>
